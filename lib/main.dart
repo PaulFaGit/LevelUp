@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:firebase_core/firebase_core.dart';
-import 'package:levelup/HomeView.dart';
+import 'package:LevelUp/HomeView.dart';
 import 'firebase_options.dart';
 
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;

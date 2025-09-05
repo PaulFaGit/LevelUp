@@ -2,8 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:firebase_ui_auth/firebase_ui_auth.dart' as fb_ui;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:levelup/habit_card.dart';
-import 'package:levelup/habit_detail_page.dart';
+import 'package:LevelUp/habit_card.dart';
+import 'package:LevelUp/habit_detail_page.dart';
 import '../services/habit_service.dart';
 
 class HomeView extends StatefulWidget {
