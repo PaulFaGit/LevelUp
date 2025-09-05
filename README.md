@@ -1,16 +1,13 @@
-# levelup
+# LevelUp 🚀
 
-A new Flutter project.
+**LevelUp** ist eine Flutter-App, die dir hilft, deine Gewohnheiten zu tracken, Fortschritte sichtbar zu machen und dich selbst (oder mit anderen) spielerisch zu motivieren.  
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## ✨ Features
+- 📊 Tracke deine täglichen Habits und Routinen  
+- 🏆 Punkte- und Levelsystem für zusätzliche Motivation  
+- 👥 Vergleich mit anderen oder einfach für dich selbst nutzen  
+- 🌙 Cross-Plattform: Android, iOS und Web mit Flutter  
 
-A few resources to get you started if this is your first Flutter project:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
