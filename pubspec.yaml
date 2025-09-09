@@ -1,39 +1,32 @@
-name: LevelUp
-description: "Einfach dein Leben hochleveln"
+name: levelup
 publish_to: 'none'
-
+description: LevelUp MVP — Flutter + Firebase
 version: 1.0.0+1
-
 environment:
-  sdk: '>=3.4.3 <4.0.0'
+  sdk: '>=3.3.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
-  firebase_core: ^4.1.0
-  firebase_auth: ^6.0.2
-  firebase_ui_auth: ^3.0.0
-  firebase_ui_oauth_google: ^2.0.0
-  cloud_firestore: ^6.0.1
-  table_calendar: ^3.2.0
+  google_fonts: ^6.2.1
+  # Firebase
+  firebase_core: ^3.4.0
+  firebase_auth: ^5.2.0
+  cloud_firestore: ^5.4.4
+  google_sign_in: ^6.2.1
+  # State & utils
+  flutter_riverpod: ^2.5.1
+  intl: ^0.19.0
+  firebase_storage: ^12.3.1
+  image_picker: ^1.1.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
-  flutter_launcher_icons: ^0.13.1   
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
-
   assets:
-    - assets/images/levelup.png
-
-flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: "assets/images/levelup.png"
-  min_sdk_android: 21
-  adaptive_icon_background: "#000000"   
-  adaptive_icon_foreground: "assets/images/levelup.png"
+    - assets/
