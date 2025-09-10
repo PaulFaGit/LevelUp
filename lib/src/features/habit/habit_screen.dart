@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../shared/xp_logic.dart';    // enthält setTodayLevel und xpCluster
-import '../../shared/widgets.dart';     // enthält glass()
+import '../../shared/xp_logic.dart'; // enthält setTodayLevel und xpCluster
+import '../../shared/widgets.dart'; // enthält glass()
 
 class HabitScreen extends StatefulWidget {
   final DocumentReference<Map<String, dynamic>> habitRef;
@@ -25,73 +25,97 @@ class _HabitScreenState extends State<HabitScreen> {
           );
         }
 
-        final title = (data['title'] ?? 'Habit') as String;
-        final emoji = (data['emoji'] ?? '✨') as String;
-        final category = (data['category'] ?? '') as String;
-        final streak = (data['streak'] ?? 0) as int;
-        final isFav = (data['favorite'] ?? false) as bool;
-        final description = (data['description'] ?? '') as String;
-        final history = (data['history'] as List? ?? const [])
-            .map((e) => e.toString())
-            .toSet();
+        // Holt die Katalogdaten, um die Beschreibungen zu ergänzen
+        return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          future: FirebaseFirestore.instance
+              .collection('catalog_habits')
+              .doc(widget.habitRef.id)
+              .get(),
+          builder: (context, catalogSnap) {
+            if (!catalogSnap.hasData || !catalogSnap.data!.exists) {
+              // Zeigt Lade-Indikator, bis Katalogdaten verfügbar sind
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+            final catalogData = catalogSnap.data!.data();
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(title),
-            actions: [
-              IconButton(
-                tooltip: isFav ? 'Aus Favoriten entfernen' : 'Zu Favoriten',
-                onPressed: () => widget.habitRef.update({'favorite': !isFav}),
-                icon: Icon(isFav ? Icons.star : Icons.star_border),
+            // Kombiniert Benutzerdaten mit den Katalogdaten für die vollständige Ansicht
+            final combinedData = {
+              ...catalogData!,
+              ...data,
+            };
+
+            final title = (combinedData['title'] ?? 'Habit') as String;
+            final emoji = (combinedData['emoji'] ?? '✨') as String;
+            final category = (combinedData['category'] ?? '') as String;
+            final streak = (combinedData['streak'] ?? 0) as int;
+            final isFav = (combinedData['favorite'] ?? false) as bool;
+            final description = (combinedData['description'] ?? '') as String;
+            final history = (combinedData['history'] as List? ?? const [])
+                .map((e) => e.toString())
+                .toSet();
+
+            return Scaffold(
+              appBar: AppBar(
+                title: Text(title),
+                actions: [
+                  IconButton(
+                    tooltip: isFav ? 'Aus Favoriten entfernen' : 'Zu Favoriten',
+                    onPressed: () =>
+                        widget.habitRef.update({'favorite': !isFav}),
+                    icon: Icon(isFav ? Icons.star : Icons.star_border),
+                  ),
+                ],
               ),
-            ],
-          ),
-          body: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // --- Header-Karte ---
-              glass(
+              body: ListView(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(emoji, style: const TextStyle(fontSize: 64)),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${category.isNotEmpty ? '$category · ' : ''}🔥 $streak',
-                      style: const TextStyle(color: Color(0xFF9ca3af)),
+                children: [
+                  // --- Header-Karte ---
+                  glass(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(emoji, style: const TextStyle(fontSize: 64)),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${category.isNotEmpty ? '$category · ' : ''}🔥 $streak',
+                          style: const TextStyle(color: Color(0xFF9ca3af)),
+                        ),
+                        if (description.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(description, textAlign: TextAlign.center),
+                        ],
+                        const SizedBox(height: 12),
+                        xpCluster(widget.habitRef, combinedData),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              widget.habitRef.update({'favorite': !isFav}),
+                          icon: Icon(isFav ? Icons.star : Icons.star_border),
+                          label: Text(isFav ? 'Favorit' : 'Zu Favoriten'),
+                        ),
+                      ],
                     ),
-                    if (description.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(description, textAlign: TextAlign.center),
-                    ],
-                    const SizedBox(height: 12),
-                    xpCluster(widget.habitRef, data),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          widget.habitRef.update({'favorite': !isFav}),
-                      icon: Icon(isFav ? Icons.star : Icons.star_border),
-                      label: Text(isFav ? 'Favorit' : 'Zu Favoriten'),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // --- Historie: Monatskalender mit Navigation ---
+                  const Text(
+                    'Historie',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFcbd5e1),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  _MonthCalendar(history: history), // Korrigierter Aufruf
+                ],
               ),
-
-              const SizedBox(height: 16),
-
-              // --- Historie: Monatskalender mit Navigation ---
-              const Text(
-                'Historie',
-                style: TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFFcbd5e1),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _MonthCalendar(history: history),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -105,7 +129,8 @@ class _HabitScreenState extends State<HabitScreen> {
 /// - Zukunft: neutral
 class _MonthCalendar extends StatefulWidget {
   const _MonthCalendar({required this.history});
-  final Set<String> history; // ISO-UTC Tagesstrings, z. B. "2025-09-01T00:00:00.000Z"
+  final Set<String>
+      history; // ISO-UTC Tagesstrings, z. B. "2025-09-01T00:00:00.000Z"
 
   @override
   State<_MonthCalendar> createState() => _MonthCalendarState();
@@ -126,8 +151,18 @@ class _MonthCalendarState extends State<_MonthCalendar> {
 
   String _monthName(int m) {
     const names = [
-      'Januar','Februar','März','April','Mai','Juni',
-      'Juli','August','September','Oktober','November','Dezember'
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember'
     ];
     return names[m - 1];
   }
@@ -144,15 +179,15 @@ class _MonthCalendarState extends State<_MonthCalendar> {
 
   void _prevMonth() {
     setState(() {
-      _shownMonthFirstUtc =
-          DateTime.utc(_shownMonthFirstUtc.year, _shownMonthFirstUtc.month - 1, 1);
+      _shownMonthFirstUtc = DateTime.utc(
+          _shownMonthFirstUtc.year, _shownMonthFirstUtc.month - 1, 1);
     });
   }
 
   void _nextMonth() {
     setState(() {
-      _shownMonthFirstUtc =
-          DateTime.utc(_shownMonthFirstUtc.year, _shownMonthFirstUtc.month + 1, 1);
+      _shownMonthFirstUtc = DateTime.utc(
+          _shownMonthFirstUtc.year, _shownMonthFirstUtc.month + 1, 1);
     });
   }
 
@@ -314,13 +349,41 @@ class _MonthCalendarState extends State<_MonthCalendar> {
             physics: const NeverScrollableScrollPhysics(),
             childAspectRatio: 1.8,
             children: const [
-              Center(child: Text('Mo', style: TextStyle(color: Color(0xFF9fb3c8), fontWeight: FontWeight.w700))),
-              Center(child: Text('Di', style: TextStyle(color: Color(0xFF9fb3c8), fontWeight: FontWeight.w700))),
-              Center(child: Text('Mi', style: TextStyle(color: Color(0xFF9fb3c8), fontWeight: FontWeight.w700))),
-              Center(child: Text('Do', style: TextStyle(color: Color(0xFF9fb3c8), fontWeight: FontWeight.w700))),
-              Center(child: Text('Fr', style: TextStyle(color: Color(0xFF9fb3c8), fontWeight: FontWeight.w700))),
-              Center(child: Text('Sa', style: TextStyle(color: Color(0xFF9fb3c8), fontWeight: FontWeight.w700))),
-              Center(child: Text('So', style: TextStyle(color: Color(0xFF9fb3c8), fontWeight: FontWeight.w700))),
+              Center(
+                  child: Text('Mo',
+                      style: TextStyle(
+                          color: Color(0xFF9fb3c8),
+                          fontWeight: FontWeight.w700))),
+              Center(
+                  child: Text('Di',
+                      style: TextStyle(
+                          color: Color(0xFF9fb3c8),
+                          fontWeight: FontWeight.w700))),
+              Center(
+                  child: Text('Mi',
+                      style: TextStyle(
+                          color: Color(0xFF9fb3c8),
+                          fontWeight: FontWeight.w700))),
+              Center(
+                  child: Text('Do',
+                      style: TextStyle(
+                          color: Color(0xFF9fb3c8),
+                          fontWeight: FontWeight.w700))),
+              Center(
+                  child: Text('Fr',
+                      style: TextStyle(
+                          color: Color(0xFF9fb3c8),
+                          fontWeight: FontWeight.w700))),
+              Center(
+                  child: Text('Sa',
+                      style: TextStyle(
+                          color: Color(0xFF9fb3c8),
+                          fontWeight: FontWeight.w700))),
+              Center(
+                  child: Text('So',
+                      style: TextStyle(
+                          color: Color(0xFF9fb3c8),
+                          fontWeight: FontWeight.w700))),
             ],
           ),
 
@@ -342,7 +405,6 @@ class _MonthCalendarState extends State<_MonthCalendar> {
               return dayCell(dayNum);
             },
           ),
-
         ],
       ),
     );

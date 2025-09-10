@@ -172,8 +172,37 @@ class HomeScreen extends ConsumerWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: favorites.length,
-                itemBuilder: (context, index) =>
-                    HabitCard.fromSnapshot(favorites[index]),
+                itemBuilder: (context, index) {
+                  final userHabitDoc = favorites[index];
+                  final userHabitData = userHabitDoc.data();
+
+                  // Holen Sie die Katalogdaten, um die Beschreibungen zu ergänzen
+                  return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    // Die ID des Katalog-Habits ist dieselbe wie die ID des Benutzer-Habits
+                    future: FirebaseFirestore.instance
+                        .collection('catalog_habits')
+                        .doc(userHabitDoc.id)
+                        .get(),
+                    builder: (context, catalogSnap) {
+                      // Warten, bis die Katalogdaten geladen sind
+                      if (!catalogSnap.hasData || !catalogSnap.data!.exists) {
+                        return const Center(child: LinearProgressIndicator());
+                      }
+                      final catalogData = catalogSnap.data!.data();
+
+                      // Kombinieren Sie die Benutzerdaten mit den Katalogdaten für die UI
+                      final combinedData = {
+                        ...catalogData!,
+                        ...userHabitData,
+                      };
+
+                      return HabitCard(
+                        habitRef: userHabitDoc.reference,
+                        h: combinedData,
+                      );
+                    },
+                  );
+                },
                 separatorBuilder: (context, index) =>
                     const SizedBox(height: 12),
               );
