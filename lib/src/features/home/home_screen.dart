@@ -50,13 +50,10 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authStateChangesProvider);
-    final user = auth.value;
+    final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final userDoc = ref.watch(userDocProvider);
@@ -64,14 +61,12 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leadingWidth: 56, // Platz für den Kreis
+        leadingWidth: 56,
         leading: userDoc.when(
           data: (doc) {
             final data = doc?.data() ?? const <String, dynamic>{};
             final totalXP = (data['totalXP'] ?? 0) as int;
-            final level = (data['totalLevel'] is int)
-                ? data!['totalLevel'] as int
-                : levelFromXP(totalXP);
+            final level = levelFromXP(totalXP);
 
             return Padding(
               padding: const EdgeInsets.only(left: 12),
@@ -171,28 +166,24 @@ class HomeScreen extends ConsumerWidget {
                   final userHabitDoc = favorites[index];
                   final userHabitData = userHabitDoc.data();
 
-                  // Holen Sie die Katalogdaten, um die Beschreibungen zu ergänzen
                   return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    // Die ID des Katalog-Habits ist dieselbe wie die ID des Benutzer-Habits
                     future: FirebaseFirestore.instance
                         .collection('catalog_habits')
                         .doc(userHabitDoc.id)
                         .get(),
                     builder: (context, catalogSnap) {
-                      // Warten, bis die Katalogdaten geladen sind
                       if (!catalogSnap.hasData || !catalogSnap.data!.exists) {
                         return const Center(child: LinearProgressIndicator());
                       }
                       final catalogData = catalogSnap.data!.data();
 
-                      // Kombinieren Sie die Benutzerdaten mit den Katalogdaten für die UI
                       final combinedData = {
                         ...catalogData!,
                         ...userHabitData,
                       };
 
                       return HabitCard(
-                        habitRef: userHabitDoc.reference, // Hier wird die korrekte Referenz übergeben
+                        habitRef: userHabitDoc.reference,
                         h: combinedData,
                       );
                     },
@@ -208,9 +199,8 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          if (!context.mounted) return;
-          await Navigator.push(
+        onPressed: () {
+          Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AllHabitsScreen()),
           );
@@ -256,10 +246,6 @@ class _LevelHeaderCard extends StatelessWidget {
         .toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    final width = MediaQuery.sizeOf(context).width;
-    final isWide = width >= 700;
-    final double circleSize = isWide ? 110 : 92;
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12.0),
       child: glass(
@@ -281,34 +267,32 @@ class _LevelHeaderCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
 
-            Text(
-              '$totalXp XP insgesamt',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF9fb3c8)),
-            ),
-
             const SizedBox(height: 14),
-
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 12,
+            
+            // Gesamt-XP Balken kleiner machen und zentrieren
+            Center(
+              child: SizedBox(
+                width: 200, // Feste, kleinere Breite
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 12,
+                  ),
+                ),
               ),
             ),
+
             const SizedBox(height: 8),
             Text(
               '$toNext XP bis Level-Up',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF9fb3c8)), // KORREKTUR: TextStyle hinzugefügt
+              style: const TextStyle(color: Color(0xFF9fb3c8)),
             ),
 
             if (entries.isNotEmpty) ...[
               const SizedBox(height: 18),
-              _CategoryCircles(
-                entries: entries,
-                circleSize: circleSize,
-              ),
+              _CategoryProgressRow(entries: entries),
             ],
           ],
         ),
@@ -317,47 +301,141 @@ class _LevelHeaderCard extends StatelessWidget {
   }
 }
 
-class _CategoryCircles extends StatelessWidget {
-  const _CategoryCircles({
+class _CategoryProgressRow extends StatelessWidget {
+  const _CategoryProgressRow({
     required this.entries,
-    required this.circleSize,
   });
 
   final List<MapEntry<String, int>> entries;
-  final double circleSize;
+
+  static const _categoryMeta = <String, Map<String, dynamic>>{
+    'Body': {'icon': Icons.fitness_center, 'color': Color(0xFF6C63FF)},
+    'Mind': {'icon': Icons.psychology, 'color': Color(0xFF00BFA6)},
+    'Social': {'icon': Icons.groups_rounded, 'color': Color(0xFFFB8C00)},
+    'Wellness': {'icon': Icons.self_improvement, 'color': Color(0xFFEC407A)},
+    'Work': {'icon': Icons.work, 'color': Color(0xFF42A5F5)},
+  };
 
   @override
   Widget build(BuildContext context) {
-    Color tone(int i) {
-      final base = Theme.of(context).colorScheme.surfaceVariant;
-      final t = 0.55 + 0.05 * (i % 5);
-      return base.withOpacity(t.clamp(0.0, 0.9));
-    }
-
-    final textStyleLabel = Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: const Color(0xFFdbeafe),
-          letterSpacing: 0.2,
-        );
-    final textStyleXP = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-        );
+    final sortedEntries = entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top5Entries = sortedEntries.take(5).toList();
 
     return Center(
       child: Wrap(
-        alignment: WrapAlignment.center,
         spacing: 12,
         runSpacing: 12,
+        alignment: WrapAlignment.center,
+        children: top5Entries.map((entry) {
+          final category = entry.key;
+          final totalXp = entry.value;
+          final level = levelFromXP(totalXp);
+          final currentLevelStart = 60 * level * (level + 1) ~/ 2;
+          final nextLevelXP = 60 * (level + 1) * (level + 2) ~/ 2;
+          final xpInCurrentLevel = totalXp - currentLevelStart;
+          final xpNeededForNextLevel = nextLevelXP - currentLevelStart;
+          final progress = xpNeededForNextLevel > 0
+              ? xpInCurrentLevel / xpNeededForNextLevel
+              : 0.0;
+          final remainingXp = nextLevelXP - totalXp;
+
+          final meta = _categoryMeta[category];
+          final iconData = meta?['icon'] ?? Icons.category;
+          final color = meta?['color'] ?? Theme.of(context).colorScheme.secondary;
+
+          return _CategoryProgressCard(
+            category: category,
+            level: level,
+            totalXp: totalXp,
+            remainingXp: remainingXp,
+            progress: progress,
+            iconData: iconData,
+            color: color,
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _CategoryProgressCard extends StatelessWidget {
+  const _CategoryProgressCard({
+    required this.category,
+    required this.level,
+    required this.totalXp,
+    required this.remainingXp,
+    required this.progress,
+    required this.iconData,
+    required this.color,
+  });
+
+  final String category;
+  final int level;
+  final int totalXp;
+  final int remainingXp;
+  final double progress;
+  final IconData iconData;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: (MediaQuery.of(context).size.width / 2) - 24,
+      constraints: const BoxConstraints(maxWidth: 150),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          for (int i = 0; i < entries.length; i++)
-            _CategoryCircle(
-              label: entries[i].key,
-              xp: entries[i].value,
-              size: circleSize,
-              background: tone(i),
-              textStyleLabel: textStyleLabel,
-              textStyleXP: textStyleXP,
+          Icon(iconData, size: 24, color: color),
+          const SizedBox(height: 8),
+          Text(
+            category,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium!.copyWith(
+              fontWeight: FontWeight.w700,
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Lvl $level',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(4),
+              backgroundColor: color.withOpacity(0.3),
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '+$remainingXp XP',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall!.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.7),
+            ),
+          ),
         ],
       ),
     );
@@ -374,85 +452,28 @@ class _LevelBadge extends StatelessWidget {
     final border = Theme.of(context).dividerColor.withOpacity(0.35);
 
     return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: bg.withOpacity(0.6),
-        shape: BoxShape.circle,
-        border: Border.all(color: border, width: 2),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black38,
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          )
-        ],
-      ),
-      child: Center(
-        child: Text(
-          '$level',
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-          ),
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: bg.withOpacity(0.6),
+          shape: BoxShape.circle,
+          border: Border.all(color: border, width: 2),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black38,
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            )
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _CategoryCircle extends StatelessWidget {
-  const _CategoryCircle({
-    required this.label,
-    required this.xp,
-    required this.size,
-    required this.background,
-    required this.textStyleLabel,
-    required this.textStyleXP,
-  });
-
-  final String label;
-  final int xp;
-  final double size;
-  final Color background;
-  final TextStyle? textStyleLabel;
-  final TextStyle? textStyleXP;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: background,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Theme.of(context).dividerColor.withOpacity(0.25),
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black45,
-            blurRadius: 10,
-            offset: Offset(0, 6),
-          )
-        ],
-      ),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, textAlign: TextAlign.center, style: textStyleLabel),
-                const SizedBox(height: 4),
-                Text('$xp XP', textAlign: TextAlign.center, style: textStyleXP),
-              ],
+        child: Center(
+          child: Text(
+            '$level',
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }

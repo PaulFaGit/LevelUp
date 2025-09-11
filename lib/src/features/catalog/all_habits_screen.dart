@@ -21,19 +21,21 @@ final catalogProvider =
 });
 
 // ------------------------------------------------------------
-// Firestore: User-Favoriten-IDs (users/{uid}/habits where favorite==true)
+// NEU: Firestore: ALLE Habits des Users streamen
 // ------------------------------------------------------------
-final favoriteHabitIdsProvider = StreamProvider.autoDispose<Set<String>>((ref) {
+final allUserHabitsProvider =
+    StreamProvider.autoDispose<Map<String, DocumentSnapshot<Map<String, dynamic>>>>((ref) {
   final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return const Stream<Set<String>>.empty();
+  if (user == null) {
+    return const Stream.empty();
+  }
 
-  final query = FirebaseFirestore.instance
+  return FirebaseFirestore.instance
       .collection('users')
       .doc(user.uid)
       .collection('habits')
-      .where('favorite', isEqualTo: true);
-
-  return query.snapshots().map((qs) => qs.docs.map((d) => d.id).toSet());
+      .snapshots()
+      .map((qs) => {for (var doc in qs.docs) doc.id: doc});
 });
 
 // ------------------------------------------------------------
@@ -51,7 +53,7 @@ class _AllHabitsScreenState extends ConsumerState<AllHabitsScreen> {
   @override
   Widget build(BuildContext context) {
     final catalogAsync = ref.watch(catalogProvider);
-    final favIdsAsync = ref.watch(favoriteHabitIdsProvider);
+    final userHabitsAsync = ref.watch(allUserHabitsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -63,6 +65,7 @@ class _AllHabitsScreenState extends ConsumerState<AllHabitsScreen> {
         error: (e, _) => Center(child: Text('Fehler: $e')),
         data: (qs) {
           final docs = qs.docs;
+          final userHabitDocs = userHabitsAsync.asData?.value ?? {};
 
           // Kategorien ableiten
           final categories = <String>{};
@@ -79,12 +82,6 @@ class _AllHabitsScreenState extends ConsumerState<AllHabitsScreen> {
                   : docs
                       .where((d) => d.data()['category'] == selectedCategory)
                       .toList();
-
-          // Favoriten-IDs des Users
-          final favIds = favIdsAsync.maybeWhen(
-            data: (ids) => ids,
-            orElse: () => <String>{},
-          );
 
           final user = FirebaseAuth.instance.currentUser;
 
@@ -112,11 +109,18 @@ class _AllHabitsScreenState extends ConsumerState<AllHabitsScreen> {
                 ),
               ),
 
-              // Kartenliste: nutzt DIESELBE HabitCard wie auf der Main Page
+              // Kartenliste
               ...filtered.map((catalogDoc) {
                 final catalogData = catalogDoc.data();
+                final userHabitDoc = userHabitDocs[catalogDoc.id];
+                final userHabitData = userHabitDoc?.data() ?? {};
+                
+                final combinedData = {
+                  ...catalogData,
+                  ...userHabitData,
+                };
 
-                // Ziel-Ref im User-Space (wichtig: HabitScreen erwartet users/{uid}/habits)
+                // Ziel-Ref im User-Space
                 final userHabitRef = (user == null)
                     ? FirebaseFirestore.instance.collection('_dummy').doc().withConverter<Map<String, dynamic>>(
                         fromFirestore: (s, _) => s.data() ?? <String, dynamic>{},
@@ -128,34 +132,16 @@ class _AllHabitsScreenState extends ConsumerState<AllHabitsScreen> {
                         .collection('habits')
                         .doc(catalogDoc.id);
 
-                // UI-Daten: Katalogdaten + aktueller Fav-Status + Defaults
-                final hForUi = <String, dynamic>{
-                  ...catalogData,                  // title, category, description, emoji, xpSmall/M/L, ...
-                  'favorite': favIds.contains(catalogDoc.id),
-                  'xp': 0,
-                  'streak': 0,
-                  'history': const <String>[],
-                  'todayLevel': 0,
-                };
-
-                // Falls User-Habit noch nicht existiert: diese Initialdaten werden
-                // bei Tap in HabitCard via set(merge:true) angelegt.
                 final initialUserData = <String, dynamic>{
-                  'title': catalogData['title'],
-                  'category': catalogData['category'],
-                  'description': catalogData['description'],
-                  'emoji': catalogData['emoji'],
-                  'xpSmall': catalogData['xpSmall'],
-                  'xpMedium': catalogData['xpMedium'],
-                  'xpLarge': catalogData['xpLarge'],
-                  'xp': 0,
-                  'streak': 0,
-                  'history': <String>[],
-                  'todayLevel': 0,
-                  'favorite': favIds.contains(catalogDoc.id),
+                  ...catalogData,
+                  ...userHabitData,
+                  'favorite': userHabitData['favorite'] ?? false,
+                  'xp': userHabitData['xp'] ?? 0,
+                  'streak': userHabitData['streak'] ?? 0,
+                  'history': userHabitData['history'] ?? <String>[],
+                  'todayLevel': userHabitData['todayLevel'] ?? 0,
                 };
 
-                // Wenn kein User eingeloggt ist: zeige Info-Karte statt klickbarer HabitCard
                 if (user == null) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -178,13 +164,12 @@ class _AllHabitsScreenState extends ConsumerState<AllHabitsScreen> {
                   );
                 }
 
-                // << HIER: gleiche HabitCard wie auf der Main Page >>
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: HabitCard(
                     habitRef: userHabitRef,
-                    h: hForUi,
-                    ensureExistsWith: initialUserData, // sorgt dafür, dass beim Tap das User-Dokument vorhanden ist
+                    h: combinedData,
+                    ensureExistsWith: initialUserData,
                   ),
                 );
               }),

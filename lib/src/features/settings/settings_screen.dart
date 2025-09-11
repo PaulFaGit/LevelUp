@@ -1,25 +1,58 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart'; // Hinzugefügt für Uint8List
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 
-class SettingsScreen extends ConsumerStatefulWidget {
+
+// Ein reaktiver Provider für den aktuellen Benutzer
+final currentUserProvider = StreamProvider.autoDispose<User?>((ref) {
+  return FirebaseAuth.instance.authStateChanges();
+});
+
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(currentUserProvider);
+
+    return userAsync.when(
+      data: (user) {
+        if (user == null) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return _SettingsContent(user: user);
+      },
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (e, stack) => Scaffold(
+        body: Center(child: Text('Fehler: $e')),
+      ),
+    );
+  }
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsContent extends ConsumerStatefulWidget {
+  final User user;
+  const _SettingsContent({super.key, required this.user});
+
+  @override
+  ConsumerState<_SettingsContent> createState() => _SettingsContentState();
+}
+
+class _SettingsContentState extends ConsumerState<_SettingsContent> {
   final _nameCtrl = TextEditingController();
   bool _saving = false;
   bool _uploading = false;
-
-  User? get _user => FirebaseAuth.instance.currentUser;
 
   @override
   void initState() {
@@ -28,8 +61,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _bootstrap() async {
-    final user = _user;
-    if (user == null) return;
+    final user = widget.user;
 
     // Prefill mit Auth-Anzeigename
     _nameCtrl.text = user.displayName ?? '';
@@ -43,7 +75,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (fsName != null && fsName.trim().isNotEmpty) {
       _nameCtrl.text = fsName;
     }
-    setState(() {});
   }
 
   @override
@@ -53,14 +84,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _saveName() async {
-    final user = _user;
-    if (user == null) return;
+    final user = widget.user;
     final name = _nameCtrl.text.trim();
 
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bitte gib einen Anzeigenamen ein.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bitte gib einen Anzeigenamen ein.')),
+        );
+      }
       return;
     }
 
@@ -91,8 +123,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _pickAndUploadPhoto() async {
-    final user = _user;
-    if (user == null) return;
+    final user = widget.user;
 
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -136,7 +167,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profilbild aktualisiert.')),
       );
-      setState(() {}); // neu zeichnen
     } on FirebaseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -153,8 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _deleteAccount() async {
-    final user = _user;
-    if (user == null) return;
+    final user = widget.user;
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -179,8 +208,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirm != true) return;
 
     try {
-      // Optional: verbundene Daten in Firestore löschen. (Achtung: Kosten!)
-      // Hier minimal nur das Auth-Konto löschen.
       await user.delete();
 
       if (!mounted) return;
@@ -191,7 +218,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // Zurücknavigieren, oder zu Login
       Navigator.of(context).pop();
     } on FirebaseAuthException catch (e) {
-      // Häufig: requires-recent-login -> Re-Login verlangen
       if (!mounted) return;
       final msg = e.code == 'requires-recent-login'
           ? 'Bitte melde dich neu an und versuche es erneut.'
@@ -207,11 +233,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = _user;
-    final photoURL = user?.photoURL;
+    final user = widget.user;
+    final photoURL = user.photoURL;
     final nameInitial = (_nameCtrl.text.isNotEmpty
         ? _nameCtrl.text[0].toUpperCase()
-        : (user?.email?.substring(0, 1).toUpperCase() ?? '?'));
+        : (user.email?.substring(0, 1).toUpperCase() ?? '?'));
 
     return Scaffold(
       appBar: AppBar(
@@ -256,8 +282,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 18),
-
-          // Anzeigename
           TextField(
             controller: _nameCtrl,
             textAlign: TextAlign.center,
@@ -281,7 +305,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const Divider(height: 1),
 
           const SizedBox(height: 24),
-          // Account Danger-Zone
           Text(
             'Konto',
             textAlign: TextAlign.center,
@@ -292,7 +315,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            user?.email ?? '',
+            user.email ?? '',
             textAlign: TextAlign.center,
             style: const TextStyle(color: Color(0xFF9fb3c8)),
           ),

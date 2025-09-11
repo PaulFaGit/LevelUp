@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum AuthMode { signIn, register }
 
@@ -47,6 +48,37 @@ class _SignInScreenState extends State<SignInScreen> {
     return null;
   }
 
+  Future<void> _initializeUserHabits(String uid) async {
+    final catalogSnapshot =
+        await FirebaseFirestore.instance.collection('catalog_habits').get();
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final doc in catalogSnapshot.docs) {
+      final catalogData = doc.data();
+      final initialData = <String, dynamic>{
+        'title': catalogData['title'],
+        'category': catalogData['category'],
+        'description': catalogData['description'],
+        'emoji': catalogData['emoji'],
+        'xpSmall': catalogData['xpSmall'],
+        'xpMedium': catalogData['xpMedium'],
+        'xpLarge': catalogData['xpLarge'],
+        'xp': 0,
+        'streak': 0,
+        'history': <String>[],
+        'todayLevel': 0,
+        'favorite': false,
+      };
+      final userHabitRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('habits')
+          .doc(doc.id);
+      batch.set(userHabitRef, initialData);
+    }
+    await batch.commit();
+  }
+
   Future<void> _submit() async {
     if (!formKey.currentState!.validate()) return;
     setState(() => loading = true);
@@ -57,10 +89,14 @@ class _SignInScreenState extends State<SignInScreen> {
           password: password.text,
         );
       } else {
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email.text.trim(),
           password: password.text,
         );
+        if (userCredential.user != null) {
+          // Habits für neuen Benutzer initialisieren
+          await _initializeUserHabits(userCredential.user!.uid);
+        }
         // optional: direkt E-Mail verifizieren
         // await FirebaseAuth.instance.currentUser?.sendEmailVerification();
       }
