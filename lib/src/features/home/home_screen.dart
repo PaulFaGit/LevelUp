@@ -28,21 +28,20 @@ final userDocProvider =
   return docRef.snapshots();
 });
 
-final habitsProvider =
+final favoriteHabitDocsProvider =
     StreamProvider.autoDispose<QuerySnapshot<Map<String, dynamic>>>((ref) {
-  final auth = ref.watch(authStateChangesProvider);
-  final user = auth.value;
+  final user = ref.watch(authStateChangesProvider).value;
   if (user == null) {
-    // leerer Stream solange abgemeldet
     return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
   }
   return FirebaseFirestore.instance
       .collection('users')
       .doc(user.uid)
       .collection('habits')
-      .orderBy('title')
+      .where('favorite', isEqualTo: true)
       .snapshots();
 });
+
 
 // ------------------------------ UI ------------------------------
 
@@ -51,7 +50,6 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Defensive: Wenn doch mal ohne User gerendert wird, nichts Firestore-abhängiges anzeigen
     final auth = ref.watch(authStateChangesProvider);
     final user = auth.value;
 
@@ -62,7 +60,7 @@ class HomeScreen extends ConsumerWidget {
     }
 
     final userDoc = ref.watch(userDocProvider);
-    final habitsSnap = ref.watch(habitsProvider);
+    final favoriteHabitsSnap = ref.watch(favoriteHabitDocsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -122,7 +120,6 @@ class HomeScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 88),
         children: [
-          // ---------- HEADER: Level + Kreis-Kategorien + Fortschrittsbalken ----------
           userDoc.when(
             data: (doc) {
               final data = doc?.data() ?? const <String, dynamic>{};
@@ -145,7 +142,6 @@ class HomeScreen extends ConsumerWidget {
 
           const SizedBox(height: 16),
 
-          // ---------- Favoriten ----------
           const Text(
             'Favoriten',
             textAlign: TextAlign.center,
@@ -154,10 +150,9 @@ class HomeScreen extends ConsumerWidget {
               color: Color(0xFFcbd5e1),
             ),
           ),
-          habitsSnap.when(
+          favoriteHabitsSnap.when(
             data: (qs) {
-              final favorites =
-                  qs.docs.where((d) => d.data()['favorite'] == true).toList();
+              final favorites = qs.docs;
               if (favorites.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 6),
@@ -197,7 +192,7 @@ class HomeScreen extends ConsumerWidget {
                       };
 
                       return HabitCard(
-                        habitRef: userHabitDoc.reference,
+                        habitRef: userHabitDoc.reference, // Hier wird die korrekte Referenz übergeben
                         h: combinedData,
                       );
                     },
@@ -227,8 +222,6 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-// ------------------------------ Neuer Header-Card ------------------------------
-
 class _LevelHeaderCard extends StatelessWidget {
   const _LevelHeaderCard({
     required this.totalXp,
@@ -244,18 +237,15 @@ class _LevelHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Fortschritt zum nächsten Level
     final currentBase = _cumulative(level);
     final nextNeed = _cumulative(level + 1);
     final span = (nextNeed - currentBase).clamp(1, 1 << 31);
     final progress = ((totalXp - currentBase) / span).clamp(0.0, 1.0);
     final toNext = nextNeed - totalXp;
 
-    // Stufen-Icons wie im alten evolvingHero
     const stages = ['🌱', '🌿', '🌳', '🏯', '🚀', '🌌'];
     final stage = (level / 3).floor().clamp(0, 5);
 
-    // Kategorie-Einträge sortieren (absteigend)
     final entries = categoryXp.entries
         .map((e) => MapEntry(
               e.key,
@@ -266,7 +256,6 @@ class _LevelHeaderCard extends StatelessWidget {
         .toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    // responsive Kreise: 3 per Row auf Phones, größer auf Tablets
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 700;
     final double circleSize = isWide ? 110 : 92;
@@ -278,11 +267,9 @@ class _LevelHeaderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Icon (oben zentriert)
             Text(stages[stage], style: const TextStyle(fontSize: 52)),
             const SizedBox(height: 8),
 
-            // Level (zentriert)
             const Text('Level', style: TextStyle(color: Color(0xFF9fb3c8))),
             Text(
               '$level',
@@ -294,7 +281,6 @@ class _LevelHeaderCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
 
-            // Total XP (zentriert)
             Text(
               '$totalXp XP insgesamt',
               textAlign: TextAlign.center,
@@ -303,7 +289,6 @@ class _LevelHeaderCard extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            // PROGRESS BAR (zentriert, breite 100%)
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: LinearProgressIndicator(
@@ -315,10 +300,9 @@ class _LevelHeaderCard extends StatelessWidget {
             Text(
               '$toNext XP bis Level-Up',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF9fb3c8)),
+              style: const TextStyle(color: Color(0xFF9fb3c8)), // KORREKTUR: TextStyle hinzugefügt
             ),
 
-            // Kreise für Kategorien (zentriert, Wrap)
             if (entries.isNotEmpty) ...[
               const SizedBox(height: 18),
               _CategoryCircles(
@@ -333,8 +317,6 @@ class _LevelHeaderCard extends StatelessWidget {
   }
 }
 
-// ------------------------------ Kategorien: runde Badges ------------------------------
-
 class _CategoryCircles extends StatelessWidget {
   const _CategoryCircles({
     required this.entries,
@@ -346,10 +328,8 @@ class _CategoryCircles extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // leichte Farbabstufung basierend auf Index
     Color tone(int i) {
       final base = Theme.of(context).colorScheme.surfaceVariant;
-      // Nuancen über Opacity variieren:
       final t = 0.55 + 0.05 * (i % 5);
       return base.withOpacity(t.clamp(0.0, 0.9));
     }

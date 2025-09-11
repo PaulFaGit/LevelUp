@@ -89,7 +89,10 @@ Future<void> setTodayLevel(
     final habit = habitSnap.data()!;
 
     // Aktueller Zustand maßgeblich aus DB
-    final int prevLevel = (habit['todayLevel'] ?? 0) as int;
+    // Datum prüfen: falls es ein anderer Tag ist, ist prevLevel 0.
+    final String? prevIso = (habit['todayIso'] ?? '') as String;
+    final int prevLevel = prevIso == bn.todayIso ? (habit['todayLevel'] ?? 0) as int : 0;
+    
     if (prevLevel == clampedLevel) {
       // Nichts zu tun
       return;
@@ -171,6 +174,7 @@ Future<void> setTodayLevel(
     // 3a) Habit-Dokument
     tx.update(habitRef, {
       'todayLevel': clampedLevel,
+      'todayIso': bn.todayIso,
       'xp': newHabitXp,
       'level': computedLevel,
       'history': (days.toList()..sort()),
@@ -222,8 +226,11 @@ Widget xpCluster(
   DocumentReference<Map<String, dynamic>> ref,
   Map<String, dynamic> h,
 ) {
-  final lvl = (h['todayLevel'] ?? 0) as int;
-
+  final String currentDayIso = todayIsoBerlin();
+  final String? savedDayIso = h['todayIso'] as String?;
+  // Das Level nur verwenden, wenn es vom heutigen Tag stammt.
+  final int lvl = savedDayIso == currentDayIso ? (h['todayLevel'] ?? 0) as int : 0;
+  
   // Anforderungen (req*) aus dem Habit lesen
   final String reqS = '${h['reqSmall'] ?? ''}';
   final String reqM = '${h['reqMedium'] ?? ''}';
