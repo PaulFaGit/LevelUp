@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:levelup/src/shared/xp_logic.dart';
+import 'package:levelup/src/features/profile/user_profile_screen.dart';
 
 
 class LeaderboardScreen extends StatelessWidget {
@@ -52,19 +53,33 @@ class LeaderboardScreen extends StatelessWidget {
               final categoryXP =
                   (data['categoryXP'] ?? const {}) as Map<String, dynamic>;
 
-              return _LeaderboardTile(
-                rank: i + 1,
-                isYou: isYou,
-                name: displayName,
-                photoURL: photoURL,
-                totalXP: totalXP,
-                categoryXP: {
-                  'Body': (categoryXP['Body'] ?? 0) as num,
-                  'Mind': (categoryXP['Mind'] ?? 0) as num,
-                  'Social': (categoryXP['Social'] ?? 0) as num,
-                  'Wellness': (categoryXP['Wellness'] ?? 0) as num,
-                  'Work': (categoryXP['Work'] ?? 0) as num,
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserProfileScreen(
+                        userId: snap.id,
+                        initialDisplayName: displayName,
+                      ),
+                    ),
+                  );
                 },
+                child: _LeaderboardTile(
+                  rank: i + 1,
+                  isYou: isYou,
+                  name: displayName,
+                  photoURL: photoURL,
+                  totalXP: totalXP,
+                  categoryXP: {
+                    'Body': (categoryXP['Body'] ?? 0) as num,
+                    'Mind': (categoryXP['Mind'] ?? 0) as num,
+                    'Social': (categoryXP['Social'] ?? 0) as num,
+                    'Wellness': (categoryXP['Wellness'] ?? 0) as num,
+                    'Work': (categoryXP['Work'] ?? 0) as num,
+                  },
+                ),
               );
             },
           );
