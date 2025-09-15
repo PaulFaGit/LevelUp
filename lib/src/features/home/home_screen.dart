@@ -7,6 +7,7 @@ import 'package:levelup/src/features/settings/settings_screen.dart';
 import 'package:levelup/src/shared/habit_card.dart';
 
 import '../../shared/xp_logic.dart';
+import '../friends/friends_screen.dart';
 import '../leaderboard/leaderboard_screen.dart';
 import '../stats/stats_screen.dart';
 import 'widgets/level_overview.dart';
@@ -86,6 +87,14 @@ class HomeScreen extends ConsumerWidget {
             ),
             icon: const Icon(Icons.bar_chart),
             tooltip: 'Stats',
+          ),
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FriendsScreen()),
+            ),
+            icon: const Icon(Icons.group),
+            tooltip: 'Freunde',
           ),
           IconButton(
             onPressed: () => Navigator.push(
